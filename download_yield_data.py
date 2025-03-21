@@ -1,66 +1,80 @@
-import pandas as pd
 import logging
 import requests
+import itertools
+import us
 import json
-import config
+import pandas as pd
+import utils
+from config import NASS_BASE_URL, NASS_API_KEY, CROP_YIELD_DATA
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-def get_usda_crop_yield(state='CALIFORNIA', crop="CORN", start_year=2010, end_year=2023, limit=50000):
-  all_data = []
 
-  for year in range(start_year, end_year + 1):
-    logging.info(f"Fetching USDA data for {crop} in {state}, Year: {year}")
-    params = {
-            "key": NASS_API_KEY,
+def get_usda_crop_yield(api_key,
+                        state_alpha=["CA"],
+                        crops=["CORN"],
+                        statisticcat_descs=["YIELD"],
+                        start_year=2020,
+                        end_year=2020
+                        ):
+                        #group_descs = ["FIELD CROPS"],
+
+    base_url = NASS_BASE_URL
+    all_records = []
+
+    # Create the cartesian product for years, states, commodities, groups, and statistic categories
+    combinations = itertools.product(
+        range(start_year, end_year + 1),
+        state_alpha,
+        crops,
+        statisticcat_descs
+    )
+
+    for year, state_alpha, crop, stat_desc in combinations:
+        params = {
+            "key": api_key,
             "source_desc": "SURVEY",
             "sector_desc": "CROPS",
-            "group_desc": "FIELD CROPS",
-            "commodity_desc": crop,
             "agg_level_desc": "COUNTY",
-            "state_name": state,
-            "year": year,
-            "format": "json",
-            "limit": limit
-    }
-            #"unit_desc": "BU / ACRE",
+            "state_alpha": state_alpha,
+            "year": str(year),
+            "commodity_desc": crop,
+            "statisticcat_desc": stat_desc,
+            "format": "JSON"
+        }
 
-    try:
-        response = requests.get(NASS_BASE_URL, params=params)
-        response.raise_for_status()  # Raises HTTPError for bad responses
-
+        logging.info(f"Downloading data for {year} - {state_alpha} - {stat_desc} - {crop}  ...")
+        response = requests.get(base_url, params=params)
+        logging.info(f"url: {response.url}")
         try:
-            response_json = response.json()
-        except json.JSONDecodeError as e:
-            logging.warning(f"JSON Decode Error for {year}: {e}\nResponse Text: {response.text[:500]}")
+            response.raise_for_status()
+        except Exception as e:
+            print(f"Request failed for {year} - {state_alpha} - {stat_desc} - {crop}: {e}")
             continue
 
-        if "error" in response_json:
-            logging.warning(f"USDA API Error for {year}: {response_json['error']}")
-            continue
-
-        data = response_json.get("data", [])
-        if data:
-          df = pd.DataFrame(data)
-          all_data.append(df)
-          logging.info(f"Retrieved {len(df)} records for {year}.")
+        data = response.json()
+        records = data.get("data", [])
+        if records:
+            all_records.extend(records)
         else:
-          logging.warning(f"No data found for {year}.")
+            print(f"No data returned for {year} - {state_alpha} - {stat_desc} - {crop}")
 
-    except requests.exceptions.RequestException as e:
-        logging.error(f"HTTP Request Error for {year}: {e}")
-        logging.error(f"Response Text: {response.text[:500] if 'response' in locals() else 'No Response'}")
+    # Convert the results to a DataFrame
+    df = pd.DataFrame(all_records)
+    if not df.empty:
+        # Convert "year" column to numeric if possible
+        df["year"] = pd.to_numeric(df["year"], errors="coerce")
 
-if all_data:
-    combined_df = pd.concat(all_data, ignore_index=True)
-    logging.info(f"Available columns in yield df: {combined_df.columns.tolist()}")
-    combined_df.to_csv(CROP_YIELD_DATA, index=False)
-    logging.info(f"USDA Data saved: {CROP_YIELD_DATA}")
-    return combined_df
-else:
-    logging.info("No data was retrieved for yield data.")
-    return None
+        # Clean the "Value" column: remove commas and convert to numeric
+        df["Value"] = df["Value"].str.replace(",", "", regex=False)
+        df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+
+        # Combine state_fips and county_code to make a 5 digit county_fips
+        df["county_fips"] = df["state_fips_code"].astype(str) + df["county_code"].str.zfill(3)
+      
+    return df
 
 
 if __name__ == "__main__":
-    get_usda_crop_yield(state="CALIFORNIA", crop="CORN", start_year=2020, end_year=2021)
+    df = get_usda_crop_yield(api_key=NASS_API_KEY, state_alpha=["IA", "CA"], crops=["CORN"], start_year=2020, end_year=2021)
+    utils.save_df(df, CROP_YIELD_DATA)

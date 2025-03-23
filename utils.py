@@ -1,8 +1,15 @@
 import logging
 import os
+import us
 import pandas as pd
+from typing import List
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+def fetch_state_fips(state_alpha_list: List[str]) -> List[str]:
+    return [us.states.lookup(abbr).fips for abbr in state_alpha_list]
+
 
 def save_df(df: pd.DataFrame, file_name):
     extn = os.path.splitext(file_name)[1]

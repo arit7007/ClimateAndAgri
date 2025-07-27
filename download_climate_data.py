@@ -209,7 +209,7 @@ def climate_data_pipeline(states: List[str], start_year: int, end_year: int):
 
     # === Aggregate county-year ===
     logging.info("Aggregating to county-year...")
-    grow_months = list(range(1, 13))  # aggregating for the whole year, whithout consideration for crop-specific growing season
+    grow_months = list(range(4, 10))  # Aggregating for the common growing season, without considering for crop-specific growing season
     county_df = aggregate_climate_by_period(joined_df, months=grow_months)
     save_df(county_df, DATA_PATH / f"climate_with_county_aggregated_{start_year}_{end_year}.csv")
 

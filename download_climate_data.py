@@ -2,7 +2,7 @@
 Climate Data Pipeline
 
 Downloads NOAA GSOM climate data, maps stations to county FIPS,
-pivots to monthly station-level format, and aggregates to county-year level.
+pivots to monthly station-level format, and aggregates to a default growing season - Apr - Sep.
 """
 
 import argparse
@@ -20,7 +20,6 @@ from climate_utils import (
 from config import NOAA_BASE_URL, DATA_PATH
 from utils import fetch_state_fips, save_df, logging
 
-# === Constants ===
 DATASET_ID = "GSOM"
 DATATYPE = [
     "TMIN", "TMAX", "PRCP", "SNOW", "SNWD",

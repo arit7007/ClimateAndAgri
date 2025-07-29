@@ -46,7 +46,7 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
 
 | File | Description |
 |------|-------------|
-| `download_yield_data.py` | Downloads USDA NASS crop yield data (2010–2024) at county level. Pivots area, yield, and production into ML-ready format |
+| `download_yield_data.py` | Downloads USDA NASS crop yield data (2010–2024) at the county level. |
 
 ---
 
@@ -65,5 +65,26 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
    ```bash
    pip install -r requirements.txt
 
-> This codebase follows a clean, consistent structure inspired by **Vibe Coding** practices — prioritizing clarity, modularity, and reproducibility.
+2. Set your .env:
 
+   ```bash
+   NOAA_TOKEN=your_noaa_token
+   NASS_API_KEY=your_nass_key
+   SH_CLIENT_ID=your_sentinelhub_id
+   SH_CLIENT_SECRET=your_sentinelhub_secret
+   GEE_PROJECT_ID=your_gee_project_id
+
+3. Download various data:
+
+   ```bash
+   python download_climate_data.py --states CA IA IL --start_year 2010 --end_year 2014
+   python download_yield_data.py --states CA IA IL --crops CORN WHEAT --start_year 2010 --end_year 2014
+   python download_ndvi_data.py --states CA IA IL --start_year 2010 --end_year 2014
+   python download_soil_data.py --states CA IA IL
+
+4. Combine the final data from the above programs and run the ml:
+
+   ```bash
+   python ml.py
+
+> Disclaimer: Portions of the code have been optimized and generated using vibe code

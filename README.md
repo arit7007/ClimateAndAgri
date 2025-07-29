@@ -27,20 +27,20 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
 
 | File | Description |
 |------|-------------|
-| `download_climate_data.py` | Downloads NOAA GSOM climate data, maps stations to counties, and aggregates monthly weather stats (e.g. PRCP, TMAX, HTDD) to the growing season |
+| `download_climate_data.py` | Downloads NOAA GSOM climate data, maps stations to counties, and aggregates monthly weather stats (e.g., PRCP, TMAX, HTDD). |
 | `climate_utils.py` | Helper functions for NOAA API calls, spatial joins, pivoting monthly weather data, and crop-specific growing month lookup |
 
 ### NDVI Data
 
 | File | Description |
 |------|-------------|
-| `download_ndvi_data.py` | Uses Google Earth Engine (MODIS/061/MOD13A3) to download NDVI/EVI by county and year. Aggregates April–Sept values and checkpoints progress |
+| `download_ndvi_data.py` | Uses Google Earth Engine (MODIS/061/MOD13A3) to download monthly NDVI/EVI by county. Aggregates April–Sept values |
 
 ### Soil Data
 
 | File | Description |
 |------|-------------|
-| `download_soil_data.py` | Uses ISRIC SoilGrids to extract surface-level properties (clay, silt, pH, SOC, bulk density) per county. Parallelized with `ThreadPoolExecutor` and includes checkpointing |
+| `download_soil_data.py` | Uses ISRIC SoilGrids to extract surface-level properties (clay, silt, pH, SOC, bulk density) per county. |
 
 ### Yield Data
 

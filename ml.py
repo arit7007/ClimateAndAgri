@@ -94,10 +94,10 @@ def plot_r2_comparison(results_df):
 
 def main():
     # Read the clean climate data
-    climate_df = pd.read_csv(DATA_PATH / "climate_with_county_Apr_Sep_2010_2024.csv")
+    climate_df = pd.read_csv(DATA_PATH / "final_climate_data_Apr_Sep_2010_2014.csv")
 
     # Read the clean crop yield data
-    yield_df = pd.read_csv(DATA_PATH / "crop_yield_2010_2024.csv")
+    yield_df = pd.read_csv(DATA_PATH / "final_crop_yield_data_2010_2014.csv")
     # Filter only meaningful data (and only unit_desc with ACRES until all the units are normalized).
     yield_df = yield_df[(yield_df['YIELD'] > 0) & (yield_df['unit_desc'].str.contains("ACRES", na=False))].copy()
 
@@ -107,7 +107,7 @@ def main():
                       (soil_df['clay_mean'] > 0) & (soil_df['sand_mean'] > 0)].copy()  # Filter out illogical data
 
     # Read the vegetation index data
-    ndvi_df = pd.read_csv(DATA_PATH / "veg_indices_Apr_Sep_2010_2024.csv")
+    ndvi_df = pd.read_csv(DATA_PATH / "final_ndvi_data_Apr_Sep_2010_2014.csv")
 
     # Though source data set has county_fips as 5 digits, format it again before joining
     for df_ in [climate_df, yield_df, soil_df, ndvi_df]:

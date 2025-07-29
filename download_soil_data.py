@@ -3,6 +3,8 @@ import numpy as np
 import tempfile
 import rasterio
 import argparse
+import geopandas as gpd
+from rasterio.mask import mask
 from tqdm import tqdm
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -11,12 +13,21 @@ from requests.exceptions import RequestException, HTTPError
 from pathlib import Path
 
 from soilgrids import SoilGrids
-from utils import get_county_geometries
-from config import DATA_PATH, logging
+from utils import get_county_geometries, logging
+from config import DATA_PATH
 
 CHECKPOINT_FILE = DATA_PATH / "soil_checkpoint.csv"
 OUTPUT_FILE = DATA_PATH / "county_soil_features.csv"
-RESOLUTION = 256
+RESOLUTION = 256  # Pixels for width/height of the downloaded tile
+
+SOIL_PROPERTIES = {
+    "clay": ("clay", "clay_0-5cm_mean", 10),  # Unit: g/kg (divide by 10 for %)
+    "silt": ("silt", "silt_0-5cm_mean", 10),  # Unit: g/kg (divide by 10 for %)
+    "sand": ("sand", "sand_0-5cm_mean", 10),  # Unit: g/kg (divide by 10 for %)
+    "ph": ("phh2o", "phh2o_0-5cm_mean", 10),  # Unit: pH (divide by 10)
+    "soc": ("soc", "soc_0-5cm_mean", 10),  # Unit: g/kg (dg/kg -> divide by 10)
+    "bdod": ("bdod", "bdod_0-5cm_mean", 100),  # Unit: kg/dm³ (cg/cm³ -> divide by 100)
+}
 
 
 @retry(
@@ -26,6 +37,7 @@ RESOLUTION = 256
     retry=retry_if_exception_type((ConnectionResetError, OSError, RequestException, HTTPError))
 )
 def download_soil_layer(soil_grids, service_id, coverage_id, bbox, crs, resolution, outpath):
+    """Downloads a soil data layer for a given bounding box."""
     return soil_grids.get_coverage_data(
         service_id=service_id,
         coverage_id=coverage_id,
@@ -38,6 +50,7 @@ def download_soil_layer(soil_grids, service_id, coverage_id, bbox, crs, resoluti
 
 
 def load_checkpoint(path: Path) -> set:
+    """Loads processed FIPS codes from the checkpoint file."""
     if not path.exists():
         return set()
     df = pd.read_csv(path, dtype=str)
@@ -45,23 +58,33 @@ def load_checkpoint(path: Path) -> set:
 
 
 def update_checkpoint(path: Path, county_fips: str) -> None:
+    """Adds a FIPS code to the checkpoint file."""
     df = pd.DataFrame([[county_fips]], columns=["county_fips"])
     df.to_csv(path, mode="a", header=not path.exists(), index=False)
 
 
-def process_county_static(county, soil_grids, soil_properties, resolution):
+def process_county(county: pd.Series, soil_grids: SoilGrids, resolution: int) -> dict:
+    """
+    Processes a single county: downloads all soil properties, masks, and calculates the mean.
+    """
     county_fips = county['county_fips']
-    county_name = county['county']
-    bbox = county.geometry.bounds if county.geometry.is_valid else county.geometry.buffer(0).bounds
+
+    # Ensure geometry is valid and in the correct CRS (EPSG:4326) for SoilGrids
+    geometry = county.geometry
+    if not geometry.is_valid:
+        geometry = geometry.buffer(0)
+
+    # Reproject to EPSG:4326 if necessary before getting bounds
+    gdf_county = gpd.GeoDataFrame([{'geometry': geometry}], crs="EPSG:4326")
+    bbox = gdf_county.total_bounds
 
     county_data = {
         'county_fips': county_fips,
-        'county_name': county_name,
+        'county_name': county['county'],
         'state_abbr': county['state_abbr'],
-        'state_fips': county['state_fips']
     }
 
-    for prop_name, service_id, coverage_id in soil_properties:
+    for prop_name, (service_id, coverage_id, scaling_factor) in SOIL_PROPERTIES.items():
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
             tmp.close()
             tmp_path = Path(tmp.name)
@@ -73,11 +96,22 @@ def process_county_static(county, soil_grids, soil_properties, resolution):
                     resolution=resolution,
                     outpath=str(tmp_path)
                 )
+
                 with rasterio.open(tmp_path) as src:
-                    data = src.read(1)
-                    county_data[f"{prop_name}_mean"] = float(np.nanmean(data))
+                    clipped_data, _ = mask(src, gdf_county.geometry, crop=True, nodata=src.nodata)
+
+                    clipped_data = clipped_data[0]
+
+                    masked_data = np.ma.masked_equal(clipped_data, src.nodata)
+
+                    if masked_data.count() > 0:  # Ensure there is valid data
+                        mean_val = masked_data.mean()
+                        county_data[f"{prop_name}_mean"] = float(mean_val / scaling_factor)
+                    else:
+                        county_data[f"{prop_name}_mean"] = np.nan  # No valid data in county
+
             except Exception as e:
-                logging.info(f"[{county_name}] {prop_name} failed: {e}")
+                logging.error(f"[{county_fips}] Failed on '{prop_name}': {e}")
                 county_data[f"{prop_name}_mean"] = np.nan
             finally:
                 tmp_path.unlink(missing_ok=True)
@@ -85,56 +119,53 @@ def process_county_static(county, soil_grids, soil_properties, resolution):
     return county_data
 
 
-def get_soil_data(state_abbr_list: List[str], resolution=256, max_workers=8) -> None:
-    counties = get_county_geometries(state_abbr_list)
-    checkpointed = load_checkpoint(CHECKPOINT_FILE)
-    counties = counties[~counties['county_fips'].isin(checkpointed)]
+def get_soil_data_for_states(state_abbr_list: List[str], resolution=256, max_workers=8) -> None:
+    """Main function to orchestrate downloading and processing of soil data."""
+    counties = get_county_geometries(state_abbr_list).to_crs("EPSG:4326")
+    processed_fips = load_checkpoint(CHECKPOINT_FILE)
+    counties_to_process = counties[~counties['county_fips'].isin(processed_fips)]
+
+    if counties_to_process.empty:
+        logging.info("All counties have already been processed.")
+        return
 
     soil_grids = SoilGrids()
-    soil_properties = [
-        ("clay", "clay", "clay_0-5cm_mean"),
-        ("silt", "silt", "silt_0-5cm_mean"),
-        ("sand", "sand", "sand_0-5cm_mean"),
-        ("ph", "phh2o", "phh2o_0-5cm_mean"),
-        ("soc", "soc", "soc_0-5cm_mean"),
-        ("bdod", "bdod", "bdod_0-5cm_mean")
-    ]
+    results = []
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor, tqdm(total=len(counties), desc="Downloading Soil Data") as pbar:
-        futures = {}
-        for _, row in counties.iterrows():
-            futures[executor.submit(process_county_static, row, soil_grids, soil_properties, resolution)] = row['county_fips']
+    with ThreadPoolExecutor(max_workers=max_workers) as executor, \
+            tqdm(total=len(counties_to_process), desc="Downloading Soil Data") as pbar:
 
-        batch_results = []
-        for future in as_completed(futures):
-            county_fips = futures[future]
+        future_to_fips = {
+            executor.submit(process_county, county, soil_grids, resolution): county['county_fips']
+            for _, county in counties_to_process.iterrows()
+        }
+
+        for future in as_completed(future_to_fips):
+            fips = future_to_fips[future]
             try:
                 result = future.result()
-                batch_results.append(result)
+                if result:
+                    results.append(result)
+                    # Write results to CSV and checkpoint periodically
+                    if len(results) >= max_workers or pbar.n == pbar.total - 1:
+                        df_batch = pd.DataFrame(results)
+                        df_batch.to_csv(OUTPUT_FILE, mode="a", header=not OUTPUT_FILE.exists(), index=False)
+                        for fips_code in df_batch['county_fips']:
+                            update_checkpoint(CHECKPOINT_FILE, fips_code)
+                        results.clear()
             except Exception as exc:
-                logging.info(f"Failed for {county_fips}: {exc}")
+                logging.error(f"FIPS {fips} generated an exception: {exc}")
             finally:
                 pbar.update(1)
 
-            if batch_results:
-                df_batch = pd.DataFrame(batch_results)
-                if OUTPUT_FILE.exists():
-                    df_batch.to_csv(OUTPUT_FILE, mode="a", header=False, index=False)
-                else:
-                    df_batch.to_csv(OUTPUT_FILE, mode="w", header=True, index=False)
-
-                for entry in batch_results:
-                    update_checkpoint(CHECKPOINT_FILE, entry['county_fips'])
-
-                batch_results.clear()
-
 
 def main():
-    parser = argparse.ArgumentParser(description="Download soil data by county for given states")
-    parser.add_argument("--states", nargs="+", default=["CA", "WA"], help="List of US state abbreviations")
+    parser = argparse.ArgumentParser(description="Download static soil data by county")
+    parser.add_argument("--states", nargs="+", default=["CA", "IA", "IL", "NE"], help="List of US state abbreviations")
+    parser.add_argument("--workers", type=int, default=8, help="Number of parallel workers")
     args = parser.parse_args()
 
-    get_soil_data(args.states)
+    get_soil_data_for_states(args.states, max_workers=args.workers)
     logging.info("Soil data download complete.")
 
 

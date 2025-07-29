@@ -149,7 +149,7 @@ def main():
     args = parser.parse_args()
 
     ndvi_data_path_monthly = DATA_PATH / f"gee_ndvi_monthly_{args.start_year}_{args.end_year}.csv"
-    ndvi_data_path_yearly = DATA_PATH / f"gee_ndvi_yearly_Apr_Sep_{args.start_year}_{args.end_year}.csv"
+    ndvi_data_path_yearly = DATA_PATH / f"final_ndvi_data_Apr_Sep_{args.start_year}_{args.end_year}.csv"
 
     authenticate_gee()
     download_ndvi(

@@ -1,6 +1,6 @@
 # Climate-Aware Crop Yield Prediction Using Machine Learning
 
-This project predicts U.S. county-level crop yields using climate, soil, and satellite-derived vegetation data. Built with open datasets (NOAA, USDA NASS, MODIS, SoilGrids), this modular pipeline uses machine learning to study both *what drives crop yield* and *how to forecast it accurately*.
+This project predicts U.S. county-level crop yields using climate, soil, and satellite-derived vegetation data. Built with open datasets (NOAA, USDA NASS, MODIS, SoilGrids), this modular pipeline uses machine learning to study both *what drives crop yield* and *how to forecast it accurately*. For the initial analysis, a uniform growing season from April to September was applied across all crops, without incorporating crop-specific growing periods.
 
 ---
 
@@ -86,5 +86,20 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
 
    ```bash
    python ml.py
+
+## Packages used
+   ```bash
+   pandas
+   pygris
+   geopandas
+   tenacity
+   scikit-learn
+
+
+
+
+## Authors
+Arit Prince — Student, American High School
+Arya Prince — Data Science Major, UC Berkeley
 
 > Disclaimer: Portions of the code have been optimized and generated using vibe code

@@ -9,13 +9,13 @@ Key Features:
 - Pulls yield, production, and area data for each crop-year-state combination.
 - Handles pagination, retries, and request errors gracefully.
 - Saves raw data as a CSV file with relevant fields, including `county_fips`, `year`, `commodity_desc`, `Value`, and other descriptors.
-- Optionally pivots the data to organize multiple statistics (e.g., YIELD, AREA HARVESTED) into separate columns for ML-ready analysis.
+- Pivots the data to organize multiple statistics (e.g., YIELD, AREA HARVESTED) into separate columns for ML-ready analysis.
 
 Inputs:
 - --states: List of U.S. state abbreviations (e.g., ["CA", "IA"])
 - --crops: List of crop names (e.g., ["CORN", "SOYBEANS"])
 - --start_year: Start year for the data (e.g., 2010)
-- --end_year: End year (inclusive) for the data (e.g., 2024)
+- --end_year: End year (inclusive) for the data (e.g., 2014)
 
 Outputs:
 - Raw data saved to `crop_yield_{start_year}_{end_year}_raw.csv` in the configured DATA_PATH
@@ -23,7 +23,7 @@ Outputs:
 
 Typical Usage:
 --------------
-python download_yield_data.py --states IA CA --crops CORN SOYBEANS --start_year 2010 --end_year 2024
+python download_yield_data.py --states IA CA --crops CORN SOYBEANS --start_year 2010 --end_year 2014
 
 Note:
 - Data is fetched only for crops that are reported at the county level under `source_desc="SURVEY"` and `sector_desc="CROPS"`.
@@ -141,21 +141,20 @@ def pivot_usda_crop_data(df):
 def main():
     parser = argparse.ArgumentParser(description="Fetch yield data for various crops")
     parser.add_argument("--states", nargs="+",
-                        default=["IA", "CA", "IL", "NE", "MN", "TX", "AR", "LA", "WA", "OR", "ID"],
+                        default=["IA", "CA", "IL"],
                         help="List of US state abbreviations")
     parser.add_argument("--crops", nargs="+",
                         default=["CORN", "SOYBEANS", "WHEAT", "RICE", "BARLEY", "SORGHUM"],
                         help="List of crops")
     parser.add_argument("--start_year", type=int, default=2010, help="Start year for data")
-    parser.add_argument("--end_year", type=int, default=2024, help="End year for data")
+    parser.add_argument("--end_year", type=int, default=2014, help="End year for data")
     args = parser.parse_args()
 
     raw_df = get_usda_crop_yield(NASS_API_KEY, args.states, args.crops, args.start_year, args.end_year)
     utils.save_df(raw_df, f"{DATA_PATH}/crop_yield_{args.start_year}_{args.end_year}_raw.csv")
 
-    # Temporarily disable this as previous line is added to save the raw data
     ml_df = pivot_usda_crop_data(raw_df)
-    utils.save_df(ml_df, f"{DATA_PATH}/crop_yield_{args.start_year}_{args.end_year}.csv")
+    utils.save_df(ml_df, f"{DATA_PATH}/final_crop_yield_data_{args.start_year}_{args.end_year}.csv")
 
 
 if __name__ == "__main__":

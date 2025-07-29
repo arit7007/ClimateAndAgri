@@ -96,10 +96,12 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
    scikit-learn
 
 
-
-
 ## Authors
 Arit Prince — Student, American High School
 Arya Prince — Data Science Major, UC Berkeley
+
+## Contact
+Feel free to open an issue or contact us directly if you're interested in collaboration or want to expand this work to other crops or regions.
+
 
 > Disclaimer: Portions of the code have been optimized and generated using vibe code

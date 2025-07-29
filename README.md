@@ -46,7 +46,7 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
 
 | File | Description |
 |------|-------------|
-| `download_yield_data.py` | Downloads USDA NASS crop yield data (2010–2024) at the county level. |
+| `download_yield_data.py` | Downloads USDA NASS crop yield data at the county level. |
 
 ---
 
@@ -87,6 +87,13 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
    ```bash
    python ml.py
 
+## Output Files
+model_performance_summary.csv — R² and MAE scores per crop and feature set
+
+feature_importance_by_crop.csv — Ranked top features for each crop
+
+r2_comparison_chart.png — Bar chart comparing model performance (e.g., climate-only vs. all-features)
+
 ## Packages used
    ```bash
    pandas
@@ -94,14 +101,14 @@ This project predicts U.S. county-level crop yields using climate, soil, and sat
    geopandas
    tenacity
    scikit-learn
-
+```
 
 ## Authors
-Arit Prince — Student, American High School
-Arya Prince — Data Science Major, UC Berkeley
+Arit Prince – Student, American High School
+
+Arya Prince – Data Science Major, UC Berkeley
 
 ## Contact
-Feel free to open an issue or contact us directly if you're interested in collaboration or want to expand this work to other crops or regions.
+Feel free to open an issue or contact us directly if you're interested in collaboration or would like to expand this work to other crops or geographies.
 
-
-> Disclaimer: Portions of the code have been optimized and generated using vibe code
+> Disclaimer: Portions of the code have been generated or optimized using vibe code

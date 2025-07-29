@@ -103,6 +103,13 @@ r2_comparison_chart.png — Bar chart comparing model performance (e.g., climate
    scikit-learn
 ```
 
+### Data Sources
+
+- [USDA NASS Quick Stats API](https://quickstats.nass.usda.gov/)
+- [NOAA GSOM Climate Data](https://www.ncei.noaa.gov/products/land-based-station/global-summary-of-the-month)
+- [MODIS NDVI via Google Earth Engine](https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD13A3)
+- [ISRIC SoilGrids](https://soilgrids.org/)
+
 ## Authors
 Arit Prince – Student, American High School
 

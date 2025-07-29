@@ -36,7 +36,6 @@ STATIONS_FILE = DATA_PATH / "station_metadata.csv"
 STATIONS_FILE_WITH_COUNTY = DATA_PATH / "station_metadata_with_county.csv"
 
 
-# === Checkpoint helpers ===
 def load_checkpoint(path: Path) -> set:
     if not path.exists():
         return set()
@@ -57,7 +56,6 @@ def load_station_checkpoint(path: Path) -> set:
         return set()
     df = pd.read_csv(path, dtype=str)
     return set(df["state_fips"])
-
 
 
 def update_station_checkpoint(path: Path, state_fips: str):
@@ -99,7 +97,7 @@ def aggregate_climate_by_period(pivoted_df: pd.DataFrame, months: list) -> pd.Da
     return grouped
 
 
-# === Download raw NOAA climate data for one state/year ===
+# Download raw NOAA climate data for one state/year
 def download_climate_data_by_state(state_fips: str, year: int) -> pd.DataFrame:
     all_data = []
     offset = 0
@@ -124,12 +122,11 @@ def download_climate_data_by_state(state_fips: str, year: int) -> pd.DataFrame:
     return pd.DataFrame(all_data)
 
 
-# === Main pipeline ===
 def climate_data_pipeline(states: List[str], start_year: int, end_year: int):
     state_fips_list = fetch_state_fips(states)
     climate_checkpoint = load_checkpoint(CHECKPOINT_FILE)
 
-    # === Download raw climate data ===
+    # Download raw climate data in a loop for all states passed
     for state_abbr, state_fips in zip(states, state_fips_list):
         for year in range(start_year, end_year + 1):
             if (state_fips, year) in climate_checkpoint:
@@ -154,12 +151,12 @@ def climate_data_pipeline(states: List[str], start_year: int, end_year: int):
     climate_df = pd.read_csv(CLIMATE_RAW_FILE)
     climate_df.drop_duplicates(inplace=True)
 
-    # === Pivot climate data to have the various climate elements as column for ML ready ===
+    # Pivot climate data to have the various climate elements as columns for ML-ready
     pivoted_climate_df = pivot_climate_data(climate_df)
     save_df(pivoted_climate_df, CLIMATE_RAW_FILE_PIVOTED)
     logging.info(f"Pivoted raw climate data saved to {CLIMATE_RAW_FILE_PIVOTED.resolve()}...")
 
-    # === Download station metadata with checkpoint ===
+    # Download station metadata to obtain the appropriate county_fips
     logging.info("Downloading and enriching station metadata...")
     if STATIONS_FILE.exists():
         stations_df = pd.read_csv(STATIONS_FILE)
@@ -194,21 +191,21 @@ def climate_data_pipeline(states: List[str], start_year: int, end_year: int):
     save_df(stations_df, STATIONS_FILE)
     logging.info(f"Saved stations metadata to {STATIONS_FILE}")
 
-    # === Map stations to counties and add county-level FIPS ===
+    # Map stations to counties and add county-level FIPS
     enriched_stations_df = enrich_station_with_county_fips(stations_df, states)
     save_df(enriched_stations_df, STATIONS_FILE_WITH_COUNTY)
     logging.info(f"Saved enriched stations metadata with county fips to {STATIONS_FILE_WITH_COUNTY.resolve()}")
 
-    # === Join climate data with county FIPS ===
+    # Join climate data with county FIPS, which will further be joined with rest of the data sets
     logging.info("Joining pivoted climate data with enriched stations data...")
     joined_df = pivoted_climate_df.merge(enriched_stations_df, on="station", how="left")
     save_df(joined_df, DATA_PATH / f"climate_with_county_{start_year}_{end_year}.csv")
     logging.info(
         f"Climate records: {len(pivoted_climate_df)} | Stations: {len(enriched_stations_df)} | Joined: {len(joined_df)}")
 
-    # === Aggregate county-year ===
+    # Aggregate county-year based on growing season
     logging.info("Aggregating to county-year...")
-    grow_months = list(range(4, 10))  # Aggregating for the common growing season, without considering for crop-specific growing season
+    grow_months = list(range(4, 10))  # Aggregating for the common growing season, without considering for crop-specific growing seasons
     county_df = aggregate_climate_by_period(joined_df, months=grow_months)
     save_df(county_df, DATA_PATH / f"climate_with_county_aggregated_{start_year}_{end_year}.csv")
 
@@ -218,10 +215,10 @@ def climate_data_pipeline(states: List[str], start_year: int, end_year: int):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download and process NOAA climate data pipeline")
     parser.add_argument("--states", nargs="+",
-                        default=["IA", "CA", "IL", "NE", "MN", "TX", "AR", "LA", "WA", "OR", "ID"],
+                        default=["IA", "CA", "IL"],
                         help="List of US state abbreviations")
     parser.add_argument("--start_year", type=int, default=2010)
-    parser.add_argument("--end_year", type=int, default=2024)
+    parser.add_argument("--end_year", type=int, default=2014)
     args = parser.parse_args()
 
     climate_data_pipeline(args.states, args.start_year, args.end_year)

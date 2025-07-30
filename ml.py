@@ -93,21 +93,20 @@ def plot_r2_comparison(results_df):
 
 
 def main():
-    # Read the clean climate data
-    climate_df = pd.read_csv(DATA_PATH / "final_climate_data_Apr_Sep_2010_2014.csv")
+    # Read the climate data
+    climate_df = pd.read_csv(DATA_PATH / "final_climate_data.csv")
 
-    # Read the clean crop yield data
-    yield_df = pd.read_csv(DATA_PATH / "final_crop_yield_data_2010_2014.csv")
-    # Filter only meaningful data (and only unit_desc with ACRES until all the units are normalized).
-    yield_df = yield_df[(yield_df['YIELD'] > 0) & (yield_df['unit_desc'].str.contains("ACRES", na=False))].copy()
+    # Read the crop yield data
+    yield_df = pd.read_csv(DATA_PATH / "final_crop_yield_data.csv")
+    yield_df = yield_df[(yield_df['YIELD'] > 0)].copy()
 
-    # Read the clean soil data
+    # Read the soil data
     soil_df = pd.read_csv(DATA_PATH / "county_soil_features.csv")
     soil_df = soil_df[(soil_df['ph_mean'] > 0) & (soil_df['ph_mean'] < 14) &
                       (soil_df['clay_mean'] > 0) & (soil_df['sand_mean'] > 0)].copy()  # Filter out illogical data
 
     # Read the vegetation index data
-    ndvi_df = pd.read_csv(DATA_PATH / "final_ndvi_data_Apr_Sep_2010_2014.csv")
+    ndvi_df = pd.read_csv(DATA_PATH / "final_ndvi_data.csv")
 
     # Though source data set has county_fips as 5 digits, format it again before joining
     for df_ in [climate_df, yield_df, soil_df, ndvi_df]:
@@ -129,7 +128,7 @@ def main():
 
     save_df(df, DATA_PATH / "cleaned_model_data.csv")
 
-    # === Filter crops ===
+    # Filter only the crops with enough representation
     total_rows = len(df)
     crop_counts = df['commodity_desc'].value_counts()
 
@@ -138,13 +137,11 @@ def main():
 
     logging.info(f"Crops selected for modeling: {filtered_crops}")
 
-    # === Run models ===
     all_results = {}
     for label, features in feature_sets.items():
         logging.info(f"=== Running model: {label} ===")
         all_results[label] = run_random_forest_by_crop(df, filtered_crops, features)
 
-    # === Save summary ===
     results_df = pd.DataFrame([{
         'Crop': crop,
         'n_samples': crop_counts[crop],

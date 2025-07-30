@@ -5,12 +5,6 @@ USDA Crop Yield Data Downloader
 This script downloads county-level crop yield data from the USDA NASS Quick Stats API
 for a given list of U.S. states, crops, and a specified year range.
 
-Key Features:
-- Pulls yield, production, and area data for each crop-year-state combination.
-- Handles pagination, retries, and request errors gracefully.
-- Saves raw data as a CSV file with relevant fields, including `county_fips`, `year`, `commodity_desc`, `Value`, and other descriptors.
-- Pivots the data to organize multiple statistics (e.g., YIELD, AREA HARVESTED) into separate columns for ML-ready analysis.
-
 Inputs:
 - --states: List of U.S. state abbreviations (e.g., ["CA", "IA"])
 - --crops: List of crop names (e.g., ["CORN", "SOYBEANS"])
@@ -18,9 +12,7 @@ Inputs:
 - --end_year: End year (inclusive) for the data (e.g., 2014)
 
 Outputs:
-- Raw data saved to `crop_yield_{start_year}_{end_year}_raw.csv` in the configured DATA_PATH
-- (Optional) Pivoted ML-ready data saved to `crop_yield_{start_year}_{end_year}.csv`
-
+- Pivoted ML-ready data which will get joined with other data such as climate data, vegetation indices and soil data. 
 Typical Usage:
 --------------
 python download_yield_data.py --states IA CA --crops CORN SOYBEANS --start_year 2010 --end_year 2014
@@ -116,32 +108,56 @@ def get_usda_crop_yield(api_key, state_alpha, crops, start_year, end_year):
     return df
 
 
-def pivot_usda_crop_data(df):
+def pivot_yield_data(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
-    required = {"county_fips", "year", "commodity_desc", "statisticcat_desc", "Value",
-                "unit_desc", "class_desc", "prodn_practice_desc", "util_practice_desc", "CV (%)"}
-    if missing := required - set(df.columns):
-        raise ValueError(f"Missing columns: {missing}")
+    exclude_util_practice = ["SILAGE"]      # Conflicting with different unit_desc for the same crop
+    keep_stats = ["AREA HARVESTED", "AREA PLANTED", "PRODUCTION", "YIELD"]
 
-    df["CV (%)"] = pd.to_numeric(df["CV (%)"], errors="coerce")
-    pivot = df.pivot_table(index=["county_fips", "year", "commodity_desc"],
-                           columns="statisticcat_desc", values="Value", aggfunc="mean").reset_index()
+    df = df[~df["util_practice_desc"].isin(exclude_util_practice)]
+    df = df[df["statisticcat_desc"].isin(keep_stats)]
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+
+    # Pivot to wide format
+    pivot = df.pivot_table(
+        index=["county_fips", "year", "commodity_desc"],
+        columns="statisticcat_desc",
+        values="Value",
+        aggfunc="mean"
+    ).reset_index()
     pivot.columns.name = None
 
-    group_keys = ["county_fips", "year", "commodity_desc"]
-    for col in ["unit_desc", "class_desc", "prodn_practice_desc", "util_practice_desc"]:
-        pivot[col] = df.groupby(group_keys)[col].first().values
+    # Metadata from any row
+    meta = (
+        df.groupby(["county_fips", "year", "commodity_desc"])[
+            ["class_desc", "prodn_practice_desc", "util_practice_desc", "CV (%)"]
+        ]
+        .first()
+        .reset_index()
+        .rename(columns={"CV (%)": "cv_mean"})
+    )
 
-    pivot["cv_mean"] = df.groupby(group_keys)["CV (%)"].mean().values
-    return pivot
+    # Yield unit only from YIELD rows
+    yield_units = (
+        df[df["statisticcat_desc"] == "YIELD"]
+        .groupby(["county_fips", "year", "commodity_desc"])["unit_desc"]
+        .first()
+        .reset_index()
+        .rename(columns={"unit_desc": "yield_unit"})
+    )
+
+    return (
+        pivot
+        .merge(meta, on=["county_fips", "year", "commodity_desc"], how="left")
+        .merge(yield_units, on=["county_fips", "year", "commodity_desc"], how="left")
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch yield data for various crops")
     parser.add_argument("--states", nargs="+",
-                        default=["IA", "CA", "IL"],
+                        default=["IA", "CA", "IL", "NE", "MN", "TX", "AR", "LA", "WA", "OR", "ID"],
                         help="List of US state abbreviations")
     parser.add_argument("--crops", nargs="+",
                         default=["CORN", "SOYBEANS", "WHEAT", "RICE", "BARLEY", "SORGHUM"],
@@ -151,9 +167,9 @@ def main():
     args = parser.parse_args()
 
     raw_df = get_usda_crop_yield(NASS_API_KEY, args.states, args.crops, args.start_year, args.end_year)
-    utils.save_df(raw_df, f"{DATA_PATH}/crop_yield_{args.start_year}_{args.end_year}_raw.csv")
+    utils.save_df(raw_df, f"{DATA_PATH}/crop_yield_new_{args.start_year}_{args.end_year}_raw.csv")
 
-    ml_df = pivot_usda_crop_data(raw_df)
+    ml_df = pivot_yield_data(raw_df)
     utils.save_df(ml_df, f"{DATA_PATH}/final_crop_yield_data_{args.start_year}_{args.end_year}.csv")
 
 

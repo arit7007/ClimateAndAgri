@@ -117,5 +117,3 @@ Arya Prince – Data Science Major, UC Berkeley
 
 ## Contact
 Feel free to open an issue or contact us directly if you're interested in collaboration or would like to expand this work to other crops or geographies.
-
-> Disclaimer: Portions of the code have been generated or optimized using vibe code

@@ -1,6 +1,6 @@
-## ⚠️ # This project has moved!
+# This project has moved!
 
-**New repor is now maintained at:**
+**New repo is now maintained at:**
 
 ## 👉 [github.com/ScienceAndBeyond/CropCast](https://github.com/ScienceAndBeyond/CropCast)
 
